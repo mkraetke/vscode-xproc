@@ -1,4 +1,4 @@
-# XProc for VS Code (XML Calabash 1 & 3)
+# XProc for VS Code (XProc 1.0 and 3.x)
 
 Edit, validate and run [XProc](https://xproc.org) pipelines in VS Code:
 
