@@ -1,0 +1,306 @@
+{
+  "name": "vscode-xproc",
+  "displayName": "XProc for VisualStudio Code",
+  "description": "Run and validate XProc 1.0 and 3.x pipelines with XML Calabash 1.x and 3.x, with code completion, hover documentation, outline and navigation.",
+  "version": "0.1.0",
+  "publisher": "xporc",
+  "author": {
+    "name": "Martin Kraetke"
+  },
+  "license": "BSD-2-Clause",
+  "icon": "images/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets"
+  ],
+  "keywords": [
+    "xproc",
+    "xml",
+    "calabash",
+    "xml calabash",
+    "pipeline",
+    "transpect"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:xml",
+    "workspaceContains:**/*.xpl"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "xproc",
+        "aliases": [
+          "XProc",
+          "xproc"
+        ],
+        "extensions": [
+          ".xpl",
+          ".xproc"
+        ],
+        "firstLine": "^\\s*<(\\?xml|p:declare-step|p:library|p:pipeline)\\b.*",
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "xproc",
+        "scopeName": "text.xml.xproc",
+        "path": "./syntaxes/xproc.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "xproc",
+        "path": "./snippets/xproc.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "xproc.run",
+        "title": "Run Pipeline",
+        "category": "XProc",
+        "icon": "$(play)"
+      },
+      {
+        "command": "xproc.runWithArguments",
+        "title": "Run Pipeline with Arguments…",
+        "category": "XProc",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "xproc.validate",
+        "title": "Validate Pipeline with XML Calabash",
+        "category": "XProc",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "xproc.stop",
+        "title": "Stop Running Pipeline",
+        "category": "XProc",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "xproc.showProcessorInfo",
+        "title": "Show Processor Configuration",
+        "category": "XProc"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "xproc.run",
+          "when": "resourceLangId == xproc && !xproc.running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "xproc.stop",
+          "when": "resourceLangId == xproc && xproc.running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "xproc.validate",
+          "when": "resourceLangId == xproc",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "xproc.run",
+          "when": "resourceLangId == xproc",
+          "group": "navigation@1"
+        },
+        {
+          "command": "xproc.runWithArguments",
+          "when": "resourceLangId == xproc",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "xproc.run",
+          "when": "resourceLangId == xproc",
+          "group": "xproc@1"
+        },
+        {
+          "command": "xproc.runWithArguments",
+          "when": "resourceLangId == xproc",
+          "group": "xproc@2"
+        },
+        {
+          "command": "xproc.validate",
+          "when": "resourceLangId == xproc",
+          "group": "xproc@3"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "xproc.run",
+          "when": "resourceExtname == .xpl",
+          "group": "xproc@1"
+        },
+        {
+          "command": "xproc.validate",
+          "when": "resourceExtname == .xpl",
+          "group": "xproc@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "xproc.stop",
+          "when": "xproc.running"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "xproc.run",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "editorLangId == xproc"
+      },
+      {
+        "command": "xproc.validate",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
+        "when": "editorLangId == xproc"
+      }
+    ],
+    "configuration": {
+      "title": "XProc",
+      "properties": {
+        "xproc.defaultVersion": {
+          "type": "string",
+          "enum": [
+            "1.0",
+            "3.0",
+            "3.1"
+          ],
+          "default": "3.1",
+          "description": "XProc version assumed when the pipeline has no version attribute."
+        },
+        "xproc.java.path": {
+          "type": "string",
+          "default": "java",
+          "description": "Java executable used to start XML Calabash from a jar file."
+        },
+        "xproc.java.options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional JVM options (e.g. -Xmx2g) used when XML Calabash is started from a jar file."
+        },
+        "xproc.calabash1.command": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Launcher script or executable for XML Calabash 1.x (e.g. `${workspaceFolder}/calabash/calabash.sh`). Takes precedence over `#xproc.calabash1.jar#`."
+        },
+        "xproc.calabash1.jar": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the XML Calabash 1.x jar (`xmlcalabash-1.x.jar`). Used with `java -cp … com.xmlcalabash.drivers.Main` when no command is configured."
+        },
+        "xproc.calabash1.classpath": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Additional classpath entries for XML Calabash 1.x (Saxon jar, extension jars, …). Only used together with `#xproc.calabash1.jar#`."
+        },
+        "xproc.calabash1.arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional arguments always passed to XML Calabash 1.x (before the pipeline)."
+        },
+        "xproc.calabash1.detectTranspect": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Look for a transpect-style `calabash/calabash.sh` (`calabash.bat` on Windows) in the folders above the pipeline when no Calabash 1 command or jar is configured."
+        },
+        "xproc.calabash3.command": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Launcher script or executable for XML Calabash 3.x (e.g. `xmlcalabash.sh`). Takes precedence over `#xproc.calabash3.jar#`."
+        },
+        "xproc.calabash3.jar": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to the XML Calabash 3.x application jar (`xmlcalabash-app-3.x.jar`). Started with `java -jar`."
+        },
+        "xproc.calabash3.arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional arguments always passed to XML Calabash 3.x (before the pipeline), e.g. --configuration:conf.xml."
+        },
+        "xproc.catalogs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "OASIS XML catalogs used to resolve `p:import` URIs for completion and validation. `xmlcatalog/catalog.xml` in the workspace folder is used automatically."
+        },
+        "xproc.autoCloseTags": {
+          "type": "boolean",
+          "default": true,
+          "description": "Insert the end tag automatically when a start tag is completed with '>'."
+        },
+        "xproc.validation.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the built-in (as-you-type) static validation of XProc pipelines."
+        },
+        "xproc.validation.processorOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validate pipelines with XML Calabash (static analysis only, the pipeline is not run) when a file is saved."
+        },
+        "xproc.run.saveBeforeRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Save the pipeline before running it."
+        },
+        "xproc.run.workingDirectory": {
+          "type": "string",
+          "enum": [
+            "workspaceFolder",
+            "fileDirectory"
+          ],
+          "default": "workspaceFolder",
+          "description": "Working directory for running pipelines."
+        },
+        "xproc.run.showResultInEditor": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the output that the pipeline writes to stdout (the primary output port) in a new editor."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node --test out/test/*.test.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "~1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "~5.9.0"
+  }
+}

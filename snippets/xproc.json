@@ -1,0 +1,106 @@
+{
+  "XProc 3.1 pipeline": {
+    "prefix": ["xproc3", "pipeline3"],
+    "description": "New XProc 3.1 pipeline (p:declare-step)",
+    "body": [
+      "<p:declare-step xmlns:p=\"http://www.w3.org/ns/xproc\"",
+      "  xmlns:c=\"http://www.w3.org/ns/xproc-step\"",
+      "  xmlns:xs=\"http://www.w3.org/2001/XMLSchema\"",
+      "  version=\"3.1\" name=\"${1:main}\">",
+      "",
+      "  <p:input port=\"source\" primary=\"true\"/>",
+      "  <p:output port=\"result\" primary=\"true\"/>",
+      "",
+      "  ${0:<p:identity/>}",
+      "",
+      "</p:declare-step>"
+    ]
+  },
+  "XProc 3.1 library": {
+    "prefix": ["xproc3-library", "library3"],
+    "description": "New XProc 3.1 step library (p:library)",
+    "body": [
+      "<p:library xmlns:p=\"http://www.w3.org/ns/xproc\"",
+      "  xmlns:${1:ex}=\"${2:http://example.org/ns/steps}\"",
+      "  version=\"3.1\">",
+      "",
+      "  <p:declare-step type=\"$1:${3:my-step}\">",
+      "    <p:input port=\"source\"/>",
+      "    <p:output port=\"result\"/>",
+      "    ${0:<p:identity/>}",
+      "  </p:declare-step>",
+      "",
+      "</p:library>"
+    ]
+  },
+  "XProc 1.0 pipeline": {
+    "prefix": ["xproc1", "pipeline1"],
+    "description": "New XProc 1.0 pipeline (p:declare-step)",
+    "body": [
+      "<p:declare-step xmlns:p=\"http://www.w3.org/ns/xproc\"",
+      "  xmlns:c=\"http://www.w3.org/ns/xproc-step\"",
+      "  xmlns:cx=\"http://xmlcalabash.com/ns/extensions\"",
+      "  version=\"1.0\" name=\"${1:main}\">",
+      "",
+      "  <p:input port=\"source\" primary=\"true\"/>",
+      "  <p:input port=\"parameters\" kind=\"parameter\" primary=\"true\"/>",
+      "  <p:output port=\"result\" primary=\"true\"/>",
+      "",
+      "  ${0:<p:identity/>}",
+      "",
+      "</p:declare-step>"
+    ]
+  },
+  "XProc 1.0 library": {
+    "prefix": ["xproc1-library", "library1"],
+    "description": "New XProc 1.0 step library (p:library)",
+    "body": [
+      "<p:library xmlns:p=\"http://www.w3.org/ns/xproc\"",
+      "  xmlns:${1:ex}=\"${2:http://example.org/ns/steps}\"",
+      "  version=\"1.0\">",
+      "",
+      "  <p:declare-step type=\"$1:${3:my-step}\">",
+      "    <p:input port=\"source\" primary=\"true\"/>",
+      "    <p:output port=\"result\" primary=\"true\"/>",
+      "    ${0:<p:identity/>}",
+      "  </p:declare-step>",
+      "",
+      "</p:library>"
+    ]
+  },
+  "XProc 3 try/catch": {
+    "prefix": "try-catch",
+    "description": "p:try with p:catch",
+    "body": [
+      "<p:try>",
+      "  ${1:<p:identity/>}",
+      "  <p:catch name=\"${2:catch}\">",
+      "    ${0:<p:identity/>}",
+      "  </p:catch>",
+      "</p:try>"
+    ]
+  },
+  "XProc choose": {
+    "prefix": "choose",
+    "description": "p:choose with p:when and p:otherwise",
+    "body": [
+      "<p:choose>",
+      "  <p:when test=\"${1:true()}\">",
+      "    ${2:<p:identity/>}",
+      "  </p:when>",
+      "  <p:otherwise>",
+      "    ${0:<p:identity/>}",
+      "  </p:otherwise>",
+      "</p:choose>"
+    ]
+  },
+  "XProc for-each": {
+    "prefix": "for-each",
+    "description": "p:for-each",
+    "body": [
+      "<p:for-each name=\"${1:loop}\">",
+      "  ${0:<p:identity/>}",
+      "</p:for-each>"
+    ]
+  }
+}
