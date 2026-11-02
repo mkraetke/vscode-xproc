@@ -8,6 +8,10 @@
     "name": "Martin Kraetke"
   },
   "license": "BSD-2-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mkraetke/vscode-xproc.git"
+  },
   "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.85.0"
