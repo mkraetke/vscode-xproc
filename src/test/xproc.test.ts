@@ -177,6 +177,103 @@ test('completion: close tag and root element', () => {
   assert.ok(labels('<|').includes('p:declare-step (XProc 3.1)'));
 });
 
+const XSL = 'xmlns:xsl="http://www.w3.org/1999/XSL/Transform"';
+const xslt3 = (body: string) => `<p:declare-step ${P} version="3.1">
+  <p:xslt>
+    <p:with-input port="stylesheet">
+      <p:inline>
+        <xsl:stylesheet ${XSL} version="3.0">
+          ${body}
+        </xsl:stylesheet>
+      </p:inline>
+    </p:with-input>
+  </p:xslt>
+</p:declare-step>`;
+
+test('completion: xsl:stylesheet in the stylesheet port of p:xslt', () => {
+  const inline = labels(`<p:declare-step ${P} version="3.1"><p:xslt><p:with-input port="stylesheet"><p:inline><|</p:inline></p:with-input></p:xslt></p:declare-step>`);
+  assert.deepEqual(inline.filter(l => !l.startsWith('/')), ['xsl:stylesheet (XSLT 3.0)', 'xsl:stylesheet (XSLT 2.0)', 'xsl:stylesheet (XSLT 1.0)']);
+  const implicit = completeAt(`<p:declare-step ${P} version="3.1"><p:xslt><p:with-input port="stylesheet"><|</p:with-input></p:xslt></p:declare-step>`)!;
+  const ss = implicit.items.find(i => i.label === 'xsl:stylesheet (XSLT 3.0)')!;
+  assert.match(ss.insertText, /xmlns:xsl="http:\/\/www.w3.org\/1999\/XSL\/Transform".* version="3.0">/);
+  assert.ok(implicit.items.some(i => i.label === 'p:inline'), 'XProc connections are still offered');
+  const v1 = labels(`<p:declare-step ${P} version="1.0"><p:xslt><p:input port="stylesheet"><p:inline><|</p:inline></p:input></p:xslt></p:declare-step>`);
+  assert.ok(v1.includes('xsl:stylesheet (XSLT 2.0)'));
+  assert.ok(!labels(`<p:declare-step ${P} version="3.1"><p:xslt><p:with-input port="source"><p:inline><|</p:inline></p:with-input></p:xslt></p:declare-step>`)
+    .some(l => l.startsWith('xsl:')));
+});
+
+test('completion: XSLT elements, version specific', () => {
+  const top = labels(xslt3('<xsl:|'));
+  for (const x of ['xsl:template', 'xsl:function', 'xsl:mode', 'xsl:import', 'xsl:output', '/xsl:stylesheet']) {
+    assert.ok(top.includes(x), `${x} expected`);
+  }
+  assert.ok(!top.includes('xsl:value-of'), 'instructions are not allowed at the top level');
+  const inTemplate = labels(xslt3('<xsl:template match="/"><|</xsl:template>'));
+  for (const x of ['xsl:apply-templates', 'xsl:value-of', 'xsl:iterate', 'xsl:param', 'xsl:choose', '/xsl:template']) {
+    assert.ok(inTemplate.includes(x), `${x} expected`);
+  }
+  assert.ok(!inTemplate.includes('xsl:break') && !inTemplate.includes('xsl:when') && !inTemplate.includes('p:identity'));
+  assert.ok(labels(xslt3('<xsl:template match="/"><xsl:iterate select="*"><|</xsl:iterate></xsl:template>')).includes('xsl:break'));
+  assert.deepEqual(labels(xslt3('<xsl:template match="/"><xsl:choose><|</xsl:choose></xsl:template>')).sort(), ['/xsl:choose', 'xsl:otherwise', 'xsl:when']);
+  // literal result elements contain a sequence constructor
+  assert.ok(labels(xslt3('<xsl:template match="/"><html><body><|</body></html></xsl:template>')).includes('xsl:for-each'));
+
+  const v1 = labels(xslt3('<xsl:template match="/"><|</xsl:template>').replace('version="3.0"', 'version="1.0"'));
+  assert.ok(v1.includes('xsl:value-of') && !v1.includes('xsl:sequence') && !v1.includes('xsl:iterate'));
+  const v2 = labels(xslt3('<xsl:|').replace('version="3.0"', 'version="2.0"'));
+  assert.ok(v2.includes('xsl:function') && !v2.includes('xsl:mode'));
+
+  const tpl = completeAt(xslt3('<xsl:|'))!.items.find(i => i.label === 'xsl:template')!;
+  assert.equal(tpl.insertText, 'xsl:template match="${1}">\n\t$0\n</xsl:template>');
+  const ct = completeAt(xslt3('<xsl:template match="/"><|</xsl:template>'))!.items.find(i => i.label === 'xsl:call-template')!;
+  assert.equal(ct.insertText, 'xsl:call-template name="${1}"/>');
+});
+
+test('completion: XSLT attributes and values', () => {
+  const attrs = labels(xslt3('<xsl:template match="/"><xsl:apply-templates |/></xsl:template>'));
+  assert.ok(attrs.includes('select') && attrs.includes('mode') && attrs.includes('use-when') && !attrs.includes('match'));
+  const lre = labels(xslt3('<xsl:template match="/"><div |/></xsl:template>'));
+  assert.ok(lre.includes('xsl:use-attribute-sets') && lre.includes('xsl:expand-text'));
+  assert.deepEqual(labels(xslt3('<xsl:output method="|"/>')), ['xml', 'html', 'xhtml', 'text', 'json', 'adaptive']);
+  assert.ok(labels(xslt3('<xsl:mode on-no-match="|"/>')).includes('shallow-copy'));
+
+  const body = `<xsl:variable name="g" select="1"/>
+    <xsl:attribute-set name="as1"/>
+    <xsl:template name="named"><xsl:param name="p1"/><xsl:param name="p2"/></xsl:template>
+    <xsl:template match="x" mode="m1 m2"><xsl:variable name="local" select="1"/>CURSOR</xsl:template>
+    <xsl:variable name="later" select="2"/>`;
+  const at = (s: string) => labels(xslt3(body.replace('CURSOR', s)));
+  assert.deepEqual(at('<xsl:call-template name="|"/>'), ['named']);
+  assert.deepEqual(at('<xsl:call-template name="named"><xsl:with-param name="p1"/><xsl:with-param name="|"/></xsl:call-template>'), ['p2']);
+  assert.deepEqual(at('<xsl:apply-templates mode="|"/>'), ['#current', '#unnamed', 'm1', 'm2']);
+  assert.deepEqual(at('<div xsl:use-attribute-sets="|"/>'), ['as1']);
+  assert.deepEqual(at('<xsl:value-of select="concat($|"/>'), ['$local', '$g', '$later']);
+  const r = completeAt(xslt3(body.replace('CURSOR', '<xsl:value-of select="$lo|cal"/>')))!;
+  const text = xslt3(body.replace('CURSOR', '<xsl:value-of select="$local"/>'));
+  assert.equal(text.substring(r.replaceStart, r.replaceEnd), '$local');
+  assert.deepEqual(at('<a href="{$|}"/>'), ['$local', '$g', '$later']);
+});
+
+test('XSLT: hover, implicit inline and validation', () => {
+  const text = xslt3('<xsl:template match="/"><xsl:apply-templates/></xsl:template>');
+  const h = hover(model(text), text.indexOf('xsl:apply-templates') + 4);
+  assert.match(h!.markdown, /\*\*xsl:apply-templates\*\* — XSLT instruction/);
+  assert.match(h!.markdown, /xslt-30\/#element-apply-templates/);
+
+  const implicit = `<p:declare-step ${P} version="3.1">
+  <p:xslt>
+    <p:with-input port="stylesheet">
+      <xsl:stylesheet ${XSL} version="3.0">
+        <xsl:template match="/"><p:declare-step version="3.1"><p:foo/></p:declare-step></xsl:template>
+      </xsl:stylesheet>
+    </p:with-input>
+  </p:xslt>
+</p:declare-step>`;
+  assert.deepEqual(errors(implicit), [], 'literal result elements in the XProc namespace are not validated');
+  assert.ok(labels(implicit.replace('<p:foo/>', '<p:foo/><|')).includes('xsl:value-of'));
+});
+
 test('hover and symbols', () => {
   const text = `<p:declare-step ${P} version="3.1" name="main"><p:xslt name="x"/></p:declare-step>`;
   const m = model(text);

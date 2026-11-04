@@ -4,8 +4,9 @@ import {
 } from './core';
 import { classify, findStep, isInsideAnyContent, isXProc, lookupStep, readablePorts, stepsInScope, XProcModel } from './model';
 import { AttrDef, clark, CoreElementDef, isV3, OptionDef, StepDef, XPROC_NS, XProcVersion } from './types';
+import { inXslt, xsltAttributeItems, xsltElementItems, xsltRootItems, xsltValueItems } from '../xslt/completion';
 
-export type ItemKind = 'element' | 'step' | 'attribute' | 'value' | 'closeTag' | 'port' | 'stepName' | 'namespace' | 'file';
+export type ItemKind = 'element' | 'step' | 'attribute' | 'value' | 'closeTag' | 'port' | 'stepName' | 'namespace' | 'file' | 'variable';
 
 export interface CompletionData {
   label: string;
@@ -24,8 +25,8 @@ export interface CompletionResult {
   items: CompletionData[];
   replaceStart: number;
   replaceEnd: number;
-  /** the adapter should add file paths (relative hrefs) for p:import/@href */
-  hrefCompletion?: { typed: string };
+  /** the adapter should add file paths (relative hrefs) with the given extensions */
+  hrefCompletion?: { typed: string; extensions: string[] };
   /** completion in character content (not inside markup) */
   inContent?: boolean;
 }
@@ -251,9 +252,15 @@ function elementItems(ctx: Context, parent: XElement | undefined, nsMap: Map<str
     }
     return items;
   }
-  if (ctx.inForeignContent(parent)) {
-    return items;
+  if (inXslt(parent)) {
+    return xsltElementItems(parent, nsMap, nameOnly, withLt);
   }
+  const stylesheets = isXProc(parent, 'inline') && isStylesheetPort(parent.parent) || (isV3(v) && isStylesheetPort(parent))
+    ? xsltRootItems(nsMap, nameOnly, withLt) : [];
+  if (ctx.inForeignContent(parent)) {
+    return stylesheets;
+  }
+  items.push(...stylesheets);
 
   const xp = ctx.xp(nsMap);
   const kind = classify(model, parent);
@@ -357,7 +364,15 @@ function stepSnippet(ctx: Context, label: string, def: StepDef, xp: string, need
   return `${label}${attrs}>\n${children.join('\n')}\n</${label}>`;
 }
 
+/** an input port (declaration or connection) named "stylesheet", as on p:xslt */
+function isStylesheetPort(el: XElement | undefined): boolean {
+  return isXProc(el) && (el!.local === 'input' || el!.local === 'with-input') && getAttr(el, 'port') === 'stylesheet';
+}
+
 function attributeItems(ctx: Context, el: XElement): CompletionData[] {
+  if (inXslt(el)) {
+    return xsltAttributeItems(el);
+  }
   const { model, v } = ctx;
   const present = new Set(el.attrs.map(a => a.name));
   const items: CompletionData[] = [];
@@ -409,6 +424,9 @@ function attributeItems(ctx: Context, el: XElement): CompletionData[] {
 }
 
 function valueItems(ctx: Context, el: XElement, attrName: string, typed: string, valueStart: number, valueEnd = valueStart + typed.length): CompletionResult | undefined {
+  if (inXslt(el) && attrName !== 'xmlns' && !attrName.startsWith('xmlns:')) {
+    return xsltValueItems(el, attrName, typed, valueStart, valueEnd, ctx.model.doc.text, e => ctx.full(e));
+  }
   const { model, v } = ctx;
   const items: CompletionData[] = [];
   let replaceStart = valueStart;
@@ -488,7 +506,11 @@ function valueItems(ctx: Context, el: XElement, attrName: string, typed: string,
         }
       }
     } else if (attrName === 'href' && local === 'import') {
-      return { items, replaceStart, replaceEnd: valueEnd, hrefCompletion: { typed } };
+      return { items, replaceStart, replaceEnd: valueEnd, hrefCompletion: { typed, extensions: ['xpl', 'xproc'] } };
+    } else if (attrName === 'href' && (isStylesheetPort(el) || (local === 'document' && isStylesheetPort(el.parent)))) {
+      return { items, replaceStart, replaceEnd: valueEnd, hrefCompletion: { typed, extensions: ['xsl', 'xslt'] } };
+    } else if (attrName === 'href' && local === 'import-functions') {
+      return { items, replaceStart, replaceEnd: valueEnd, hrefCompletion: { typed, extensions: ['xsl', 'xslt', 'xq', 'xqm', 'xquery'] } };
     }
   } else if (kind === 'step') {
     stepOptionValues(lookupStep(model, el.ns, el.local), attrName, add);

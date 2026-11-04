@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Code completion and hover documentation for inline XSLT 1.0, 2.0 and 3.0 stylesheets (e.g. in the `stylesheet` port of `p:xslt`).
+- File completion of `.xsl` files for the `href` of stylesheet ports.
+- The content of inline stylesheets is no longer validated as XProc and no longer appears in the outline.
+
 ## 0.1.1
 
 - Add repository link to package metadata.

@@ -5,6 +5,7 @@ import { CatalogResolver } from './catalog';
 import { mtimeOf } from './fsCache';
 import { builtinStep, coreElement } from './core';
 import { clark, CX_NS, OptionDef, PortDef, StepDef, XPROC_NS, XProcVersion } from './types';
+import { XSL_NS } from '../xslt/schema';
 
 export interface ImportInfo {
   el: XElement;
@@ -55,10 +56,10 @@ export function detectVersion(root: XElement | undefined, defaultVersion: XProcV
   return defaultVersion;
 }
 
-/** Iterates over all elements below el, skipping the content of p:inline, p:documentation and p:pipeinfo. */
+/** Iterates over all elements below el, skipping the content of p:inline, p:documentation, p:pipeinfo and of (implicitly inlined) stylesheets. */
 export function* walk(el: XElement): Generator<XElement> {
   yield el;
-  if (isXProc(el) && SKIP_CONTENT.has(el.local)) {
+  if ((isXProc(el) && SKIP_CONTENT.has(el.local)) || el.ns === XSL_NS) {
     return;
   }
   for (const c of el.children) {
@@ -68,7 +69,7 @@ export function* walk(el: XElement): Generator<XElement> {
 
 export function isInsideAnyContent(el: XElement | undefined): boolean {
   for (let p = el?.parent; p; p = p.parent) {
-    if (isXProc(p) && SKIP_CONTENT.has(p.local)) {
+    if ((isXProc(p) && SKIP_CONTENT.has(p.local)) || p.ns === XSL_NS) {
       return true;
     }
   }

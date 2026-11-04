@@ -2,6 +2,7 @@ import { elementAt, getAttr, XAttr, XElement } from '../xml/parser';
 import { commonAttrs, coreElement, stepAttrs } from './core';
 import { coreDocumentation, optionDoc, stepDocumentation } from './completion';
 import { classify, findStep, isXProc, lookupStep, XProcModel } from './model';
+import { inXslt, xsltAttrDoc, xsltElementDoc } from '../xslt/completion';
 
 export interface HoverResult {
   markdown: string;
@@ -10,6 +11,9 @@ export interface HoverResult {
 }
 
 function elementDoc(model: XProcModel, el: XElement): string | undefined {
+  if (inXslt(el)) {
+    return xsltElementDoc(el);
+  }
   const kind = classify(model, el);
   if (kind === 'core') {
     return coreDocumentation(coreElement(model.version, el.local)!, el.name);
@@ -21,6 +25,9 @@ function elementDoc(model: XProcModel, el: XElement): string | undefined {
 }
 
 function attrDoc(model: XProcModel, el: XElement, a: XAttr): string | undefined {
+  if (inXslt(el)) {
+    return xsltAttrDoc(el, a);
+  }
   const kind = classify(model, el);
   if (kind === 'step') {
     const o = lookupStep(model, el.ns, el.local)?.options.find(x => x.name === a.name);
@@ -146,6 +153,9 @@ export function symbols(model: XProcModel): SymbolData[] {
     return [];
   }
   const visit = (el: XElement): SymbolData[] => {
+    if (inXslt(el)) {
+      return [];
+    }
     const kind = classify(model, el);
     let sym: SymbolData | undefined;
     const base = { start: el.start, end: el.end, selStart: el.start + 1, selEnd: el.nameEnd, children: [] as SymbolData[] };

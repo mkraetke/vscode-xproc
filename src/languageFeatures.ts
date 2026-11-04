@@ -21,6 +21,7 @@ const ITEM_KINDS: Record<ItemKind, vscode.CompletionItemKind> = {
   stepName: vscode.CompletionItemKind.Reference,
   namespace: vscode.CompletionItemKind.Module,
   file: vscode.CompletionItemKind.File,
+  variable: vscode.CompletionItemKind.Variable,
 };
 
 const SYMBOL_KINDS: Record<SymbolKind, vscode.SymbolKind> = {
@@ -72,7 +73,7 @@ export function registerLanguageFeatures(context: vscode.ExtensionContext, model
       });
       if (result.hrefCompletion && document.uri.scheme === 'file') {
         const dir = path.dirname(document.uri.fsPath);
-        const files = await vscode.workspace.findFiles('**/*.{xpl,xproc}', '**/{node_modules,.git,.svn}/**', 2000);
+        const files = await vscode.workspace.findFiles(`**/*.{${result.hrefCompletion.extensions.join(',')}}`, '**/{node_modules,.git,.svn}/**', 2000);
         for (const f of files) {
           if (f.fsPath === document.uri.fsPath) {
             continue;
@@ -86,7 +87,7 @@ export function registerLanguageFeatures(context: vscode.ExtensionContext, model
       }
       return new vscode.CompletionList(items, false);
     },
-  }, '<', ' ', '"', "'", ':', '/', '@', '='));
+  }, '<', ' ', '"', "'", ':', '/', '@', '=', '$'));
 
   context.subscriptions.push(vscode.languages.registerHoverProvider(SELECTOR, {
     provideHover(document, position) {
