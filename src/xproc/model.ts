@@ -6,6 +6,7 @@ import { mtimeOf } from './fsCache';
 import { builtinStep, coreElement } from './core';
 import { clark, CX_NS, OptionDef, PortDef, StepDef, XPROC_NS, XProcVersion } from './types';
 import { XSL_NS } from '../xslt/schema';
+import { RNG_NS, SCH_NS, XSD_NS } from '../schemas/types';
 
 export interface ImportInfo {
   el: XElement;
@@ -37,6 +38,8 @@ export interface AnalyzeOptions {
 }
 
 const SKIP_CONTENT = new Set(['inline', 'documentation', 'pipeinfo']);
+/** (implicitly inlined) stylesheets and schemas, whose content is not XProc */
+const EMBEDDED_NS = new Set([XSL_NS, SCH_NS, RNG_NS, XSD_NS]);
 
 export function isXProc(el: XElement | undefined, local?: string): boolean {
   return !!el && el.ns === XPROC_NS && (local === undefined || el.local === local);
@@ -56,10 +59,10 @@ export function detectVersion(root: XElement | undefined, defaultVersion: XProcV
   return defaultVersion;
 }
 
-/** Iterates over all elements below el, skipping the content of p:inline, p:documentation, p:pipeinfo and of (implicitly inlined) stylesheets. */
+/** Iterates over all elements below el, skipping the content of p:inline, p:documentation, p:pipeinfo and of (implicitly inlined) stylesheets and schemas. */
 export function* walk(el: XElement): Generator<XElement> {
   yield el;
-  if ((isXProc(el) && SKIP_CONTENT.has(el.local)) || el.ns === XSL_NS) {
+  if ((isXProc(el) && SKIP_CONTENT.has(el.local)) || EMBEDDED_NS.has(el.ns)) {
     return;
   }
   for (const c of el.children) {
@@ -69,7 +72,7 @@ export function* walk(el: XElement): Generator<XElement> {
 
 export function isInsideAnyContent(el: XElement | undefined): boolean {
   for (let p = el?.parent; p; p = p.parent) {
-    if ((isXProc(p) && SKIP_CONTENT.has(p.local)) || p.ns === XSL_NS) {
+    if ((isXProc(p) && SKIP_CONTENT.has(p.local)) || EMBEDDED_NS.has(p.ns)) {
       return true;
     }
   }

@@ -274,6 +274,131 @@ test('XSLT: hover, implicit inline and validation', () => {
   assert.ok(labels(implicit.replace('<p:foo/>', '<p:foo/><|')).includes('xsl:value-of'));
 });
 
+const SCH = 'xmlns:sch="http://purl.oclc.org/dsdl/schematron"';
+const RNG = 'xmlns="http://relaxng.org/ns/structure/1.0"';
+const XS = 'xmlns:xs="http://www.w3.org/2001/XMLSchema"';
+const schemaPort = (step: string, body: string, version = '3.1') => {
+  const port = version === '1.0' ? 'p:input' : 'p:with-input';
+  return `<p:declare-step ${P} version="${version}"><p:${step}><${port} port="schema">${body}</${port}></p:${step}></p:declare-step>`;
+};
+const inline = (step: string, body: string) => schemaPort(step, `<p:inline>${body}</p:inline>`);
+const rootLabels = (text: string) => labels(text).filter(l => !l.startsWith('/') && !l.startsWith('p:'));
+
+test('completion: schema root elements in the schema port of the validation steps', () => {
+  assert.deepEqual(rootLabels(inline('validate-with-schematron', '<|')), ['sch:schema']);
+  assert.deepEqual(rootLabels(inline('validate-with-relax-ng', '<|')), ['grammar', 'element']);
+  assert.deepEqual(rootLabels(inline('validate-with-xml-schema', '<|')), ['xs:schema (XSD 1.0)', 'xs:schema (XSD 1.1)']);
+  assert.deepEqual(rootLabels(schemaPort('validate-with-schematron', '<p:inline><|</p:inline>', '1.0')), ['sch:schema']);
+  // XProc 3: implicit inline, XProc connections are still offered
+  const implicit = labels(schemaPort('validate-with-xml-schema', '<|'));
+  assert.ok(implicit.includes('xs:schema (XSD 1.0)') && implicit.includes('p:inline'));
+  // no schemas on other ports or steps
+  assert.deepEqual(rootLabels(`<p:declare-step ${P} version="3.1"><p:validate-with-schematron><p:with-input port="source"><p:inline><|</p:inline></p:with-input></p:validate-with-schematron></p:declare-step>`), []);
+  assert.deepEqual(rootLabels(`<p:declare-step ${P} version="3.1"><p:identity><p:with-input port="schema"><p:inline><|</p:inline></p:with-input></p:identity></p:declare-step>`), []);
+
+  const sch = completeAt(inline('validate-with-schematron', '<|'))!.items[0];
+  assert.match(sch.insertText, /^sch:schema xmlns:sch="http:\/\/purl.oclc.org\/dsdl\/schematron" queryBinding="\$\{1\|xslt3,xslt2,xslt\|\}">/);
+  const rng = completeAt(inline('validate-with-relax-ng', '<|'))!.items[0];
+  assert.match(rng.insertText, /^grammar xmlns="http:\/\/relaxng.org\/ns\/structure\/1.0" datatypeLibrary="[^"]+">\n\t<start>/);
+  const xsd11 = completeAt(inline('validate-with-xml-schema', '<|'))!.items[1];
+  assert.match(xsd11.insertText, /xmlns:xs="http:\/\/www.w3.org\/2001\/XMLSchema" xmlns:vc="[^"]+" elementFormDefault="qualified" vc:minVersion="1.1"/);
+  // a prefix declared in the pipeline is used
+  const declared = completeAt(`<p:declare-step ${P} xmlns:s="http://purl.oclc.org/dsdl/schematron" version="3.1"><p:validate-with-schematron><p:with-input port="schema"><p:inline><|</p:inline></p:with-input></p:validate-with-schematron></p:declare-step>`)!.items[0];
+  assert.match(declared.insertText, /^s:schema queryBinding/);
+});
+
+test('completion: Schematron', () => {
+  const sch = (body: string) => inline('validate-with-schematron', `<sch:schema ${SCH} queryBinding="xslt2">${body}</sch:schema>`);
+  const top = labels(sch('<|'));
+  for (const x of ['sch:pattern', 'sch:ns', 'sch:let', 'sch:phase', 'sch:diagnostics', '/sch:schema']) {
+    assert.ok(top.includes(x), `${x} expected`);
+  }
+  assert.ok(!top.includes('sch:assert') && !top.includes('p:identity'));
+  assert.deepEqual(labels(sch('<sch:pattern><sch:rule context="x"><sch:assert test="y"><|</sch:assert></sch:rule></sch:pattern>')).sort(),
+    ['/sch:assert', 'sch:dir', 'sch:emph', 'sch:name', 'sch:span', 'sch:value-of']);
+  const rule = completeAt(sch('<sch:pattern><|</sch:pattern>'))!.items.find(i => i.label === 'sch:rule')!;
+  assert.equal(rule.insertText, 'sch:rule context="${1}">\n\t$0\n</sch:rule>');
+  assert.ok(labels(sch('<sch:pattern><sch:rule |')).includes('context'));
+  assert.deepEqual(labels(`<p:declare-step ${P} version="3.1"><p:validate-with-schematron><p:with-input port="schema"><sch:schema ${SCH} queryBinding="|"/></p:with-input></p:validate-with-schematron></p:declare-step>`).slice(0, 3),
+    ['xslt3', 'xslt2', 'xslt']);
+
+  const body = `<sch:let name="g" value="1"/><sch:phase id="ph1"><sch:active pattern="|"/></sch:phase>
+    <sch:pattern id="p1"><sch:rule context="x"><sch:let name="r" value="1"/><sch:assert test="$|" diagnostics="d1 |">m</sch:assert></sch:rule></sch:pattern>
+    <sch:pattern id="abs" abstract="true"/>
+    <sch:diagnostics><sch:diagnostic id="d1">a</sch:diagnostic><sch:diagnostic id="d2">b</sch:diagnostic></sch:diagnostics>`;
+  const at = (n: number) => {
+    let i = -1;
+    for (let k = 0; k <= n; k++) {
+      i = body.indexOf('|', i + 1);
+    }
+    return labels(sch(body.substring(0, i).replace(/\|/g, '') + '|' + body.substring(i + 1).replace(/\|/g, '')));
+  };
+  assert.deepEqual(at(0), ['p1']);
+  assert.deepEqual(at(1), ['$r', '$g']);
+  assert.deepEqual(at(2), ['d1', 'd2']);
+});
+
+test('completion: RELAX NG', () => {
+  const rng = (body: string) => inline('validate-with-relax-ng', `<grammar ${RNG} datatypeLibrary="http://www.w3.org/2001/XMLSchema-datatypes">${body}</grammar>`);
+  assert.deepEqual(labels(rng('<|')).sort(), ['/grammar', 'define', 'div', 'include', 'start']);
+  const inStart = labels(rng('<start><|</start>'));
+  assert.ok(inStart.includes('element') && inStart.includes('zeroOrMore') && inStart.includes('ref') && !inStart.includes('anyName'));
+  // name classes only where a name class is expected
+  assert.ok(labels(rng('<start><element><|</element></start>')).includes('anyName'));
+  assert.ok(!labels(rng('<start><element name="a"><|</element></start>')).includes('anyName'));
+  assert.deepEqual(labels(rng('<start><element><choice><|</choice></element></start>')).sort(), ['/choice', 'anyName', 'choice', 'name', 'nsName']);
+  assert.ok(labels(rng('<start><element name="a"><choice><|</choice></element></start>')).includes('oneOrMore'));
+
+  assert.deepEqual(labels(rng('<start><ref name="|"/></start><define name="d1"/><define name="d2"/>')), ['d1', 'd2']);
+  assert.ok(labels(rng('<start><element name="a"><data type="|"/></element></start>')).includes('dateTime'));
+  assert.deepEqual(labels(inline('validate-with-relax-ng', `<element ${RNG} name="a"><data type="|"/></element>`)), ['string', 'token']);
+  assert.ok(labels(rng('<start><element |')).includes('datatypeLibrary'));
+});
+
+test('completion: XML Schema', () => {
+  const xsd = (body: string, attrs = '') => inline('validate-with-xml-schema', `<xs:schema ${XS} xmlns:t="urn:t" targetNamespace="urn:t"${attrs}>${body}</xs:schema>`);
+  const top = labels(xsd('<|'));
+  for (const x of ['xs:element', 'xs:complexType', 'xs:simpleType', 'xs:import', 'xs:annotation', '/xs:schema']) {
+    assert.ok(top.includes(x), `${x} expected`);
+  }
+  assert.ok(!top.includes('xs:sequence'));
+  assert.ok(labels(xsd('<xs:complexType><|')).includes('xs:sequence'));
+  const simple = labels(xsd('<xs:simpleType><xs:restriction base="xs:string"><|</xs:restriction></xs:simpleType>'));
+  assert.ok(simple.includes('xs:enumeration') && simple.includes('xs:pattern') && !simple.includes('xs:sequence'));
+  const complex = labels(xsd('<xs:complexType><xs:complexContent><xs:restriction base="t:x"><|</xs:restriction></xs:complexContent></xs:complexType>'));
+  assert.ok(complex.includes('xs:sequence') && !complex.includes('xs:enumeration'));
+  assert.equal(completeAt(xsd('<|'))!.items.find(i => i.label === 'xs:element')!.insertText, 'xs:element name="${1}" type="${2}"/>');
+
+  const types = labels(xsd('<xs:complexType name="ct"/><xs:simpleType name="st"/><xs:element name="e" type="|"/>'));
+  assert.deepEqual(types.slice(0, 3), ['t:ct', 't:st', 'xs:anyType']);
+  assert.ok(types.includes('xs:string') && !types.includes('xs:dateTimeStamp'));
+  assert.ok(labels(xsd('<xs:element name="e" type="|"/>', ' xmlns:vc="http://www.w3.org/2007/XMLSchema-versioning" vc:minVersion="1.1"')).includes('xs:dateTimeStamp'));
+  const attrTypes = labels(xsd('<xs:complexType name="ct"/><xs:simpleType name="st"/><xs:attribute name="a" type="|"/>'));
+  assert.ok(attrTypes.includes('t:st') && !attrTypes.includes('t:ct') && !attrTypes.includes('xs:anyType'));
+  assert.deepEqual(labels(xsd('<xs:element name="root"/><xs:complexType><xs:sequence><xs:element ref="|"/></xs:sequence></xs:complexType>')), ['t:root']);
+  assert.deepEqual(labels(xsd('<xs:element name="e" maxOccurs="|"/>')), ['1', 'unbounded']);
+});
+
+test('schemas: hover, href completion and validation', () => {
+  const text = inline('validate-with-schematron', `<sch:schema ${SCH}><sch:pattern><sch:rule context="x"/></sch:pattern></sch:schema>`);
+  assert.match(hover(model(text), text.indexOf('sch:rule') + 4)!.markdown, /\*\*sch:rule\*\* — ISO Schematron element/);
+  assert.match(hover(model(text), text.indexOf('context') + 2)!.markdown, /\*\*context\*\* — attribute of `sch:rule`/);
+
+  const href = completeAt(schemaPort('validate-with-relax-ng', '<p:document href="|"/>'))!;
+  assert.deepEqual(href.hrefCompletion?.extensions, ['rng', 'rnc']);
+  assert.deepEqual(completeAt(schemaPort('validate-with-xml-schema', '', '3.1').replace('port="schema"', 'port="schema" href="|"'))!.hrefCompletion?.extensions, ['xsd']);
+
+  const implicit = `<p:declare-step ${P} version="3.1">
+  <p:validate-with-xml-schema>
+    <p:with-input port="schema">
+      <xs:schema ${XS}><xs:annotation><xs:appinfo><p:foo/></xs:appinfo></xs:annotation></xs:schema>
+    </p:with-input>
+  </p:validate-with-xml-schema>
+</p:declare-step>`;
+  assert.deepEqual(errors(implicit), [], 'the content of implicitly inlined schemas is not validated');
+  assert.equal(symbols(model(implicit))[0].children.length, 1);
+});
+
 test('hover and symbols', () => {
   const text = `<p:declare-step ${P} version="3.1" name="main"><p:xslt name="x"/></p:declare-step>`;
   const m = model(text);

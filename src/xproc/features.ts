@@ -3,6 +3,7 @@ import { commonAttrs, coreElement, stepAttrs } from './core';
 import { coreDocumentation, optionDoc, stepDocumentation } from './completion';
 import { classify, findStep, isXProc, lookupStep, XProcModel } from './model';
 import { inXslt, xsltAttrDoc, xsltElementDoc } from '../xslt/completion';
+import { schemaAttrDoc, schemaElementDoc, vocabularyOf } from '../schemas/completion';
 
 export interface HoverResult {
   markdown: string;
@@ -11,6 +12,10 @@ export interface HoverResult {
 }
 
 function elementDoc(model: XProcModel, el: XElement): string | undefined {
+  const vocab = vocabularyOf(el);
+  if (vocab) {
+    return schemaElementDoc(vocab, el);
+  }
   if (inXslt(el)) {
     return xsltElementDoc(el);
   }
@@ -25,6 +30,10 @@ function elementDoc(model: XProcModel, el: XElement): string | undefined {
 }
 
 function attrDoc(model: XProcModel, el: XElement, a: XAttr): string | undefined {
+  const vocab = vocabularyOf(el);
+  if (vocab) {
+    return schemaAttrDoc(vocab, el, a);
+  }
   if (inXslt(el)) {
     return xsltAttrDoc(el, a);
   }
@@ -153,7 +162,7 @@ export function symbols(model: XProcModel): SymbolData[] {
     return [];
   }
   const visit = (el: XElement): SymbolData[] => {
-    if (inXslt(el)) {
+    if (inXslt(el) || vocabularyOf(el)) {
       return [];
     }
     const kind = classify(model, el);

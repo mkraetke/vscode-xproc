@@ -5,6 +5,9 @@ import {
 import { classify, findStep, isInsideAnyContent, isXProc, lookupStep, readablePorts, stepsInScope, XProcModel } from './model';
 import { AttrDef, clark, CoreElementDef, isV3, OptionDef, StepDef, XPROC_NS, XProcVersion } from './types';
 import { inXslt, xsltAttributeItems, xsltElementItems, xsltRootItems, xsltValueItems } from '../xslt/completion';
+import {
+  schemaAttributeItems, schemaElementItems, schemaPortVocabulary, schemaRootItems, schemaValueItems, vocabularyOf,
+} from '../schemas/completion';
 
 export type ItemKind = 'element' | 'step' | 'attribute' | 'value' | 'closeTag' | 'port' | 'stepName' | 'namespace' | 'file' | 'variable';
 
@@ -252,15 +255,20 @@ function elementItems(ctx: Context, parent: XElement | undefined, nsMap: Map<str
     }
     return items;
   }
+  const vocab = vocabularyOf(parent);
+  if (vocab) {
+    return schemaElementItems(vocab, parent, nameOnly, withLt);
+  }
   if (inXslt(parent)) {
     return xsltElementItems(parent, nsMap, nameOnly, withLt);
   }
-  const stylesheets = isXProc(parent, 'inline') && isStylesheetPort(parent.parent) || (isV3(v) && isStylesheetPort(parent))
-    ? xsltRootItems(nsMap, nameOnly, withLt) : [];
+  // documents of a port: in p:inline or, in XProc 3, directly in the port connection
+  const port = isXProc(parent, 'inline') ? parent.parent : isV3(v) ? parent : undefined;
+  const roots = isStylesheetPort(port) ? xsltRootItems(nsMap, nameOnly, withLt) : schemaRootItems(schemaPortVocabulary(port), nsMap, nameOnly, withLt);
   if (ctx.inForeignContent(parent)) {
-    return stylesheets;
+    return roots;
   }
-  items.push(...stylesheets);
+  items.push(...roots);
 
   const xp = ctx.xp(nsMap);
   const kind = classify(model, parent);
@@ -370,6 +378,10 @@ function isStylesheetPort(el: XElement | undefined): boolean {
 }
 
 function attributeItems(ctx: Context, el: XElement): CompletionData[] {
+  const vocab = vocabularyOf(el);
+  if (vocab) {
+    return schemaAttributeItems(vocab, el);
+  }
   if (inXslt(el)) {
     return xsltAttributeItems(el);
   }
@@ -424,6 +436,10 @@ function attributeItems(ctx: Context, el: XElement): CompletionData[] {
 }
 
 function valueItems(ctx: Context, el: XElement, attrName: string, typed: string, valueStart: number, valueEnd = valueStart + typed.length): CompletionResult | undefined {
+  const vocab = vocabularyOf(el);
+  if (vocab && attrName !== 'xmlns' && !attrName.startsWith('xmlns:')) {
+    return schemaValueItems(vocab, el, attrName, typed, valueStart, valueEnd, ctx.model.doc.text, e => ctx.full(e));
+  }
   if (inXslt(el) && attrName !== 'xmlns' && !attrName.startsWith('xmlns:')) {
     return xsltValueItems(el, attrName, typed, valueStart, valueEnd, ctx.model.doc.text, e => ctx.full(e));
   }
@@ -446,6 +462,7 @@ function valueItems(ctx: Context, el: XElement, attrName: string, typed: string,
     sorted.forEach(([p, ns]) => add(ns, p, undefined, 'namespace'));
   } else if (isXProc(el)) {
     const local = el.local;
+    const schemaPort = schemaPortVocabulary(local === 'document' ? el.parent : el);
     if (attrName === 'version' && !el.parent) {
       ['3.1', '3.0', '1.0'].forEach(x => add(x, `XProc ${x}`));
     }
@@ -509,6 +526,8 @@ function valueItems(ctx: Context, el: XElement, attrName: string, typed: string,
       return { items, replaceStart, replaceEnd: valueEnd, hrefCompletion: { typed, extensions: ['xpl', 'xproc'] } };
     } else if (attrName === 'href' && (isStylesheetPort(el) || (local === 'document' && isStylesheetPort(el.parent)))) {
       return { items, replaceStart, replaceEnd: valueEnd, hrefCompletion: { typed, extensions: ['xsl', 'xslt'] } };
+    } else if (attrName === 'href' && schemaPort) {
+      return { items, replaceStart, replaceEnd: valueEnd, hrefCompletion: { typed, extensions: schemaPort.extensions } };
     } else if (attrName === 'href' && local === 'import-functions') {
       return { items, replaceStart, replaceEnd: valueEnd, hrefCompletion: { typed, extensions: ['xsl', 'xslt', 'xq', 'xqm', 'xquery'] } };
     }
