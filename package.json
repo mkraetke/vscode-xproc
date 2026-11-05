@@ -2,7 +2,7 @@
   "name": "vscode-xproc",
   "displayName": "XProc for VisualStudio Code",
   "description": "Run and validate XProc 1.0 and 3.x pipelines with XML Calabash 1.x and 3.x, with code completion, hover documentation, outline and navigation.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "xporc",
   "author": {
     "name": "Martin Kraetke"
